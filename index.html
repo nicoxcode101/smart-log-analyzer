@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Analytics | Production</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #FAFAFA; 
+            color: #111827;
+        }
+
+        .saas-card {
+            background: #FFFFFF;
+            border: 1px solid #E5E7EB;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            border-radius: 12px;
+        }
+
+        .modal-transition { transition: opacity 0.2s ease, transform 0.2s ease; }
+        .toast-transition { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease; }
+        
+        .accordion-content { transition: max-height 0.3s ease-in-out, padding 0.3s ease, opacity 0.2s ease; max-height: 0; overflow: hidden; opacity: 0; }
+        .accordion-expanded { max-height: 600px; opacity: 1; }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col relative overflow-x-hidden selection:bg-indigo-100 selection:text-indigo-900">
+
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-full opacity-0 toast-transition bg-slate-900 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 border border-slate-800">
+        <i id="toastIcon" data-lucide="check-circle-2" class="w-4 h-4 text-white"></i>
+        <p id="toastMessage" class="text-[13px] font-medium tracking-wide">Action successful</p>
+    </div>
+
+    <!-- Minimalist Enterprise Navigation -->
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div class="max-w-screen-2xl mx-auto px-6 h-14 flex justify-between items-center">
+            
+            <!-- Custom Hackathon Breadcrumbs -->
+            <div class="flex items-center gap-2 text-[13px] font-medium">
+                <div class="w-6 h-6 bg-slate-900 rounded-md flex items-center justify-center mr-2 shadow-sm">
+                    <i data-lucide="triangle" class="w-3 h-3 text-white fill-white"></i>
+                </div>
+                <span class="text-gray-500 hover:text-gray-900 cursor-pointer transition-colors">DigiPlus IT</span>
+                <span class="text-gray-300">/</span>
+                <span class="text-gray-500 hover:text-gray-900 cursor-pointer transition-colors">Hackathon</span>
+                <span class="text-gray-300">/</span>
+                <span class="text-gray-900 font-semibold flex items-center gap-1.5 bg-gray-100 px-2 py-1 rounded-md">
+                    <i data-lucide="terminal" class="w-3 h-3"></i> Telemetry
+                </span>
+            </div>
+
+            <!-- Profile & Environment -->
+            <div class="flex items-center gap-5">
+                <div class="flex items-center gap-2">
+                    <span class="relative flex h-2.5 w-2.5">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    <span class="text-[12px] font-medium text-gray-600">US-East-1</span>
+                </div>
+                
+                <div class="h-4 w-px bg-gray-200"></div>
+
+                <div class="flex items-center gap-2.5 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded-lg transition-colors">
+                    <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-indigo-600 text-white flex items-center justify-center text-[11px] font-bold shadow-sm border border-indigo-700">
+                        NB
+                    </div>
+                    <span class="text-[13px] font-medium text-gray-700">Nikhil Borhade</span>
+                    <i data-lucide="chevrons-up-down" class="w-3 h-3 text-gray-400"></i>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-screen-2xl mx-auto px-6 py-8 flex-grow w-full">
+        
+        <!-- Page Header -->
+        <div class="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
+            <div>
+                <h1 class="text-2xl font-semibold text-gray-900 tracking-tight">Log Analytics</h1>
+                <p class="text-[13px] text-gray-500 mt-1">Real-time ingestion and automated root cause analysis.</p>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-sm">
+                    <span class="text-[12px] font-semibold text-gray-600">Auto-Poll</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="autoRefreshToggle" class="sr-only peer" onchange="toggleAutoRefresh()">
+                        <div class="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-slate-900"></div>
+                    </label>
+                </div>
+                <button onclick="fetchLogs(true)" id="refreshBtn" class="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-900 px-3 py-1.5 rounded-lg text-[13px] font-semibold shadow-sm transition-all flex items-center gap-2">
+                    <i id="refreshIcon" data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+                </button>
+                <button onclick="exportToCSV()" class="bg-slate-900 border border-slate-900 text-white hover:bg-slate-800 px-4 py-1.5 rounded-lg text-[13px] font-semibold shadow-sm transition-all flex items-center gap-2">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i> Export
+                </button>
+            </div>
+        </div>
+
+        <!-- High-Density Metrics -->
+        <div class="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="saas-card p-5 flex flex-col justify-between">
+                <div class="flex items-center gap-2 mb-2">
+                    <i data-lucide="server" class="w-4 h-4 text-gray-400"></i>
+                    <p class="text-[12px] font-medium text-gray-500">Total Filtered Events</p>
+                </div>
+                <p id="totalLogs" class="text-3xl font-semibold text-gray-900 tracking-tight">0</p>
+            </div>
+            
+            <div class="saas-card p-5 flex flex-col justify-between">
+                <div class="flex items-center gap-2 mb-2">
+                    <i data-lucide="alert-circle" class="w-4 h-4 text-gray-400"></i>
+                    <p class="text-[12px] font-medium text-gray-500">Flagged Anomalies</p>
+                </div>
+                <p id="totalAnomalies" class="text-3xl font-semibold text-gray-900 tracking-tight">0</p>
+            </div>
+
+            <div class="saas-card p-5 flex flex-col justify-between">
+                <div class="flex items-center gap-2 mb-2">
+                    <i data-lucide="activity" class="w-4 h-4 text-gray-400"></i>
+                    <p class="text-[12px] font-medium text-gray-500">Error Rate</p>
+                </div>
+                <p id="errorRate" class="text-3xl font-semibold text-gray-900 tracking-tight">0%</p>
+            </div>
+
+            <div class="saas-card p-4 flex items-center justify-between">
+                <div class="relative w-16 h-16 flex items-center justify-center flex-shrink-0">
+                    <canvas id="statusChart" class="z-10 relative"></canvas>
+                </div>
+                <div class="flex flex-col gap-1 w-full pl-4 border-l border-gray-100">
+                    <div class="flex items-center justify-between text-[11px] font-medium text-gray-600">
+                        <div class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Nominal</div>
+                        <span id="legendNominal" class="text-gray-900 font-semibold">0</span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px] font-medium text-gray-600">
+                        <div class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Warning</div>
+                        <span id="legendWarning" class="text-gray-900 font-semibold">0</span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px] font-medium text-gray-600">
+                        <div class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Critical</div>
+                        <span id="legendCritical" class="text-gray-900 font-semibold">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="mb-4 flex gap-2">
+            <div class="relative w-full max-w-md">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-gray-400"></i>
+                <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Search endpoints, IPs, messages..." class="w-full text-[13px] bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400 transition-shadow shadow-sm">
+            </div>
+            <div class="relative w-40">
+                <i data-lucide="filter" class="w-4 h-4 absolute left-3 top-2.5 text-gray-400 pointer-events-none"></i>
+                <select id="statusFilter" onchange="applyFilters()" class="w-full text-[13px] bg-white border border-gray-200 text-gray-700 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400 appearance-none cursor-pointer shadow-sm">
+                    <option value="ALL">All Statuses</option>
+                    <option value="ERROR">Critical (500+)</option>
+                    <option value="WARNING">Warnings (400s)</option>
+                    <option value="SUCCESS">Nominal (200s)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- High-Density SaaS Table -->
+        <div class="saas-card overflow-hidden">
+            <div class="overflow-x-auto max-h-[550px]">
+                <table class="min-w-full leading-normal relative text-left">
+                    <thead class="sticky top-0 z-20 bg-gray-50 border-b border-gray-200">
+                        <tr class="text-gray-500 text-[11px] font-medium uppercase tracking-wider">
+                            <th class="px-4 py-3 w-8"></th>
+                            <th class="px-4 py-3 font-medium">Timestamp</th>
+                            <th class="px-4 py-3 font-medium">IP Address</th>
+                            <th class="px-4 py-3 font-medium">Status</th>
+                            <th class="px-4 py-3 font-medium">Payload Message</th>
+                            <th class="px-4 py-3 font-medium text-right">Diagnosis</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTableBody" class="divide-y divide-gray-100 bg-white">
+                        <!-- Data dynamically injected -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="emptyState" class="hidden flex-col items-center justify-center py-20 text-gray-400 bg-white">
+                <div class="w-12 h-12 bg-gray-50 border border-gray-100 rounded-xl flex items-center justify-center mb-3">
+                    <i data-lucide="database" class="w-5 h-5 text-gray-300"></i>
+                </div>
+                <p class="text-[14px] font-medium text-gray-900">No logs found</p>
+                <p class="text-[13px] mt-0.5 text-gray-500">Try adjusting your filters or syncing the database.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal -->
+    <div id="aiModal" class="fixed inset-0 bg-slate-900/30 hidden items-center justify-center p-4 z-50 backdrop-blur-sm opacity-0 modal-transition pointer-events-none">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden transform scale-95 transition-all duration-200 flex flex-col border border-gray-200" id="aiModalContent">
+            
+            <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <h2 class="text-[13px] font-semibold text-gray-900 flex items-center gap-2">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-indigo-500"></i>
+                    AI Root Cause Analysis
+                </h2>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-900 hover:bg-gray-100 p-1 rounded-md transition-colors">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 bg-white overflow-y-auto max-h-[60vh] custom-scrollbar">
+                <div id="aiExplanationText" class="text-gray-700 text-[13px] leading-relaxed">
+                    <!-- Clean HTML injected here -->
+                </div>
+            </div>
+
+            <div class="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-2 items-center">
+                <button onclick="copyReport()" id="copyBtn" class="text-[12px] font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 shadow-sm">
+                    <i id="copyIcon" data-lucide="copy" class="w-3.5 h-3.5"></i> <span id="copyText">Copy</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        let globalLogs = []; 
+        let autoRefreshInterval = null;
+        let donutChart = null; 
+
+        function copyIP(e, ip) {
+            e.stopPropagation(); 
+            navigator.clipboard.writeText(ip);
+            showToast(`Copied IP address to clipboard`);
+        }
+
+        function updateChart(successCount, warningCount, errorCount) {
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            
+            document.getElementById('legendNominal').innerText = successCount;
+            document.getElementById('legendWarning').innerText = warningCount;
+            document.getElementById('legendCritical').innerText = errorCount;
+
+            if (donutChart) {
+                donutChart.data.datasets[0].data = [successCount, warningCount, errorCount];
+                donutChart.update();
+            } else {
+                donutChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Nominal', 'Warning', 'Critical'],
+                        datasets: [{
+                            data: [successCount, warningCount, errorCount],
+                            backgroundColor: ['#10B981', '#F59E0B', '#EF4444'],
+                            borderWidth: 2, 
+                            borderColor: '#ffffff', 
+                            hoverOffset: 2,
+                            cutout: '75%' 
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: { padding: 0 },
+                        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                        animation: { animateScale: true, animateRotate: true }
+                    }
+                });
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').innerText = message;
+            toast.classList.remove('translate-y-full', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-full', 'opacity-0'), 3000);
+        }
+
+        function toggleAutoRefresh() {
+            const isChecked = document.getElementById('autoRefreshToggle').checked;
+            if (isChecked) {
+                autoRefreshInterval = setInterval(() => fetchLogs(false), 5000);
+                showToast("Auto-polling enabled");
+            } else {
+                clearInterval(autoRefreshInterval);
+                showToast("Auto-polling paused");
+            }
+        }
+
+        function exportToCSV() {
+            if (globalLogs.length === 0) return;
+            const headers = ["Timestamp", "IP Address", "Status", "Message", "Anomaly Status"];
+            const csvRows = [headers.join(",")];
+            globalLogs.forEach(log => {
+                const safeMessage = `"${log.message.replace(/"/g, '""')}"`; 
+                csvRows.push([log.timestamp, log.ip_address, log.status, safeMessage, log.is_anomaly ? "Flagged" : "Nominal"].join(","));
+            });
+            const blob = new Blob([csvRows.join("\n")], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `log_export_${new Date().getTime()}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("Export downloaded");
+        }
+
+        function renderSkeletons() {
+            const tbody = document.getElementById('logTableBody');
+            tbody.innerHTML = '';
+            document.getElementById('emptyState').classList.add('hidden');
+            
+            for(let i=0; i<6; i++) {
+                tbody.innerHTML += `
+                    <tr class="animate-pulse border-b border-gray-100">
+                        <td class="px-4 py-3.5"><div class="h-3 bg-gray-200 rounded w-3"></div></td>
+                        <td class="px-4 py-3.5"><div class="h-3 bg-gray-200 rounded w-32"></div></td>
+                        <td class="px-4 py-3.5"><div class="h-3 bg-gray-200 rounded w-24"></div></td>
+                        <td class="px-4 py-3.5"><div class="h-5 bg-gray-200 rounded-md w-12"></div></td>
+                        <td class="px-4 py-3.5"><div class="h-3 bg-gray-200 rounded w-3/4"></div></td>
+                        <td class="px-4 py-3.5 flex justify-end"><div class="h-6 bg-gray-200 rounded-md w-24"></div></td>
+                    </tr>
+                `;
+            }
+        }
+
+        async function fetchLogs(isManualRefresh = false) {
+            const btn = document.getElementById('refreshBtn');
+            const icon = document.getElementById('refreshIcon');
+            
+            if (isManualRefresh || globalLogs.length === 0) {
+                if (isManualRefresh) { icon.classList.add('animate-spin'); btn.classList.add('opacity-70'); }
+                renderSkeletons(); 
+            }
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/v1/logs/?limit=100');
+                globalLogs = await response.json();
+                
+                setTimeout(() => {
+                    applyFilters();
+                    if (isManualRefresh) showToast("Telemetry updated");
+                }, 300);
+
+            } catch (error) {
+                document.getElementById('logTableBody').innerHTML = `<tr><td colspan="6" class="text-center text-gray-500 py-12 text-[13px]">Unable to connect to the API server. Ensure backend is running.</td></tr>`;
+                if(document.getElementById('autoRefreshToggle').checked) document.getElementById('autoRefreshToggle').click(); 
+            } finally {
+                if (isManualRefresh) { icon.classList.remove('animate-spin'); btn.classList.remove('opacity-70'); }
+            }
+        }
+
+        function applyFilters() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const filterValue = document.getElementById('statusFilter').value;
+
+            const filteredLogs = globalLogs.filter(log => {
+                const matchesSearch = log.message.toLowerCase().includes(searchTerm) || log.ip_address.includes(searchTerm) || String(log.status).includes(searchTerm);
+                let matchesStatus = true;
+                if (filterValue === 'ERROR') matchesStatus = log.status >= 500;
+                else if (filterValue === 'WARNING') matchesStatus = (log.status >= 400 && log.status < 500);
+                else if (filterValue === 'SUCCESS') matchesStatus = (log.status > 0 && log.status < 400);
+                return matchesSearch && matchesStatus;
+            });
+            renderTable(filteredLogs);
+        }
+
+        function toggleRow(index) {
+            const content = document.getElementById(`accordion-${index}`);
+            const icon = document.getElementById(`icon-${index}`);
+            
+            if (content.classList.contains('accordion-expanded')) {
+                content.classList.remove('accordion-expanded');
+                content.classList.remove('py-3');
+                icon.style.transform = 'rotate(0deg)';
+            } else {
+                content.classList.add('accordion-expanded');
+                content.classList.add('py-3');
+                icon.style.transform = 'rotate(90deg)';
+            }
+        }
+
+        function renderTable(logs) {
+            const tbody = document.getElementById('logTableBody');
+            const emptyState = document.getElementById('emptyState');
+            tbody.innerHTML = '';
+            
+            if (logs.length === 0) {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+            } else {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+            }
+            
+            let totalAnomalies = logs.filter(l => l.is_anomaly).length;
+            let successCount = logs.filter(l => l.status > 0 && l.status < 400).length;
+            let warningCount = logs.filter(l => l.status >= 400 && l.status < 500).length;
+            let errorCount = logs.filter(l => l.status >= 500 || l.status === 0).length;
+            
+            updateChart(successCount, warningCount, errorCount);
+
+            logs.forEach((log, index) => {
+                const isAnomaly = log.is_anomaly;
+                const rowClass = isAnomaly ? 'bg-rose-50/30 hover:bg-rose-50/60' : 'hover:bg-gray-50';
+                const safeAIText = isAnomaly && log.ai_explanation ? encodeURIComponent(log.ai_explanation).replace(/'/g, "%27") : "";
+
+                let statusBadge = `<span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[11px] font-semibold flex items-center gap-1 w-max"><div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> ${log.status}</span>`;
+                if (log.status >= 500) statusBadge = `<span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 text-[11px] font-semibold flex items-center gap-1 w-max"><div class="w-1.5 h-1.5 rounded-full bg-rose-500"></div> ${log.status}</span>`;
+                else if (log.status >= 400) statusBadge = `<span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[11px] font-semibold flex items-center gap-1 w-max"><div class="w-1.5 h-1.5 rounded-full bg-amber-500"></div> ${log.status}</span>`;
+                else if (log.status === 0) statusBadge = `<span class="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 text-[11px] font-semibold flex items-center gap-1 w-max"><div class="w-1.5 h-1.5 rounded-full bg-gray-500"></div> SYS</span>`;
+
+                const tr = document.createElement('tr');
+                tr.className = `transition-colors duration-150 cursor-pointer border-b border-gray-100 ${rowClass} group/row`;
+                tr.onclick = (e) => {
+                    if(!e.target.closest('button')) toggleRow(index);
+                };
+                
+                tr.innerHTML = `
+                    <td class="px-4 py-3 text-gray-400"><i id="icon-${index}" data-lucide="chevron-right" class="w-3.5 h-3.5 transition-transform duration-200"></i></td>
+                    <td class="px-4 py-3 text-[12px] font-medium text-gray-500 whitespace-nowrap">${log.timestamp}</td>
+                    <td class="px-4 py-3 text-[13px] font-mono text-gray-600 whitespace-nowrap" onclick="copyIP(event, '${log.ip_address}')">
+                        <div class="flex items-center gap-2 group/ip hover:text-indigo-600 transition-colors w-max">
+                            ${log.ip_address} 
+                            <i data-lucide="copy" class="w-3 h-3 opacity-0 group-hover/ip:opacity-100 transition-opacity"></i>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-sm">${statusBadge}</td>
+                    <td class="px-4 py-3 text-[13px] text-gray-700 truncate max-w-sm">${log.message}</td>
+                    <td class="px-4 py-3 text-right">
+                        ${isAnomaly 
+                            ? `<button onclick="showAIExplanation('${safeAIText}')" class="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 px-3 py-1 rounded-md text-[11px] font-semibold transition-colors flex items-center gap-1.5 ml-auto"><i data-lucide="sparkles" class="w-3 h-3"></i> Analyze</button>` 
+                            : `<span class="text-gray-400 text-[11px] font-medium flex items-center justify-end gap-1"><i data-lucide="check" class="w-3 h-3 text-emerald-400"></i> Nominal</span>`}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+                
+                const trDetail = document.createElement('tr');
+                trDetail.className = "bg-[#F8FAFC] border-b border-gray-100";
+                trDetail.innerHTML = `
+                    <td colspan="6" class="px-0 py-0 border-0">
+                        <div id="accordion-${index}" class="accordion-content px-8">
+                            <div class="bg-[#1E293B] rounded-lg font-mono text-[12px] shadow-sm overflow-hidden mb-2">
+                                <div class="px-4 py-3 text-gray-300 leading-relaxed">
+                                    <span class="text-[#38BDF8]">"timestamp"</span><span class="text-gray-400">:</span> <span class="text-[#A7F3D0]">"${log.timestamp}"</span><span class="text-gray-400">,</span><br/>
+                                    <span class="text-[#38BDF8]">"ip_address"</span><span class="text-gray-400">:</span> <span class="text-[#A7F3D0]">"${log.ip_address}"</span><span class="text-gray-400">,</span><br/>
+                                    <span class="text-[#38BDF8]">"status"</span><span class="text-gray-400">:</span> <span class="${log.status >= 500 ? 'text-[#FCA5A5]' : 'text-[#C084FC]'}">${log.status}</span><span class="text-gray-400">,</span><br/>
+                                    <span class="text-[#38BDF8]">"message"</span><span class="text-gray-400">:</span> <span class="text-[#A7F3D0]">"${log.message}"</span><span class="text-gray-400">,</span><br/>
+                                    <span class="text-[#38BDF8]">"is_anomaly"</span><span class="text-gray-400">:</span> <span class="${isAnomaly ? 'text-[#FCA5A5]' : 'text-[#C084FC]'}">${isAnomaly}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(trDetail);
+            });
+            
+            lucide.createIcons();
+            
+            document.getElementById('totalLogs').innerText = logs.length.toLocaleString();
+            document.getElementById('totalAnomalies').innerText = totalAnomalies.toLocaleString();
+            
+            const errorRate = logs.length > 0 ? Math.round((totalAnomalies / logs.length) * 100) : 0;
+            const errorRateEl = document.getElementById('errorRate');
+            errorRateEl.innerText = `${errorRate}%`;
+            
+            if(errorRate > 10) errorRateEl.className = "text-3xl font-semibold text-rose-600 tracking-tight";
+            else if (errorRate > 0) errorRateEl.className = "text-3xl font-semibold text-amber-500 tracking-tight";
+            else errorRateEl.className = "text-3xl font-semibold text-gray-900 tracking-tight";
+        }
+
+        function showAIExplanation(encodedText) {
+            let text = decodeURIComponent(encodedText);
+            
+            // 1. Remove Markdown asterisks entirely
+            text = text.replace(/\*\*/g, ''); 
+            text = text.replace(/\*\s/g, ''); 
+
+            // 2. Format headers with block styling, adding bottom margins and top margins
+            text = text.replace(/(Root Cause[s]?:?)/i, 
+                '<span class="block font-semibold text-gray-900 mb-2 mt-6">Root Cause</span>'
+            );
+            
+            text = text.replace(/(Next Step[s]?:?|Recommended Action[s]?:?)/i, 
+                '<span class="block font-semibold text-gray-900 mb-2 mt-6">Recommended Action</span>'
+            );
+            
+            // 3. Preserve AI paragraph spacing properly
+            text = text.replace(/\n\n/g, '<div class="h-4"></div>'); 
+            text = text.replace(/\n/g, ' '); 
+
+            document.getElementById('aiExplanationText').innerHTML = text;
+            
+            const copyIcon = document.getElementById('copyIcon');
+            const copyText = document.getElementById('copyText');
+            
+            copyText.innerText = "Copy";
+            copyIcon.setAttribute('data-lucide', 'copy');
+            lucide.createIcons();
+            
+            const modal = document.getElementById('aiModal');
+            const modalContent = document.getElementById('aiModalContent');
+            
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0', 'pointer-events-none');
+                modalContent.classList.remove('scale-95');
+                modalContent.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('aiModal');
+            const modalContent = document.getElementById('aiModalContent');
+            
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            modalContent.classList.remove('scale-100');
+            modalContent.classList.add('scale-95');
+            
+            setTimeout(() => modal.classList.add('hidden'), 200);
+        }
+
+        function copyReport() {
+            const text = document.getElementById('aiExplanationText').innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const copyText = document.getElementById('copyText');
+                const copyIcon = document.getElementById('copyIcon');
+                
+                copyText.innerText = "Copied!";
+                copyIcon.setAttribute('data-lucide', 'check');
+                lucide.createIcons();
+                
+                setTimeout(() => {
+                    copyText.innerText = "Copy";
+                    copyIcon.setAttribute('data-lucide', 'copy');
+                    lucide.createIcons();
+                }, 2000);
+            });
+        }
+
+        fetchLogs();
+    </script>
+</body>
+</html>
